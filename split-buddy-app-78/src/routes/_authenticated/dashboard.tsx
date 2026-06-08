@@ -35,11 +35,6 @@ function Dashboard() {
     queryFn: api.dashboard,
   });
 
-  const direct = useQuery({
-    queryKey: ["balances", "direct"],
-    queryFn: api.directBalances,
-  });
-
   const groups = useQuery({
     queryKey: ["groups"],
     queryFn: api.myGroups,
@@ -50,16 +45,29 @@ function Dashboard() {
     queryFn: api.paymentHistory,
   });
 
-  const balances: Balance[] = Array.isArray(direct.data)
-    ? direct.data
-    : [];
-
   const groupList: GroupSummary[] = Array.isArray(groups.data)
     ? groups.data
     : [];
 
   const paymentHistory: PaymentItem[] = Array.isArray(payments.data)
     ? payments.data
+    : [];
+
+  // Calculate aggregate balances from all groups
+  const allGroupBalances = useQuery({
+    queryKey: ["all-group-balances", groupList.map((g) => g.id)],
+    queryFn: async () => {
+      if (groupList.length === 0) return [];
+      const results = await Promise.all(
+        groupList.map((group) => api.groupBalances(group.id).catch(() => [])),
+      );
+      return results.flat();
+    },
+    enabled: groupList.length > 0,
+  });
+
+  const balances: Balance[] = Array.isArray(allGroupBalances.data)
+    ? (allGroupBalances.data as Balance[])
     : [];
 
   const youOwe = balances
@@ -89,7 +97,7 @@ function Dashboard() {
           </div>
 
           <Link
-            to="/expenses"
+            to="/expenses/new"
             className="inline-flex items-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 transition"
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -105,7 +113,7 @@ function Dashboard() {
             label="Net Balance"
             value={formatMoney(net)}
             tone={net >= 0 ? "good" : "bad"}
-            loading={direct.isLoading}
+            loading={allGroupBalances.isLoading}
           />
 
           <StatCard
@@ -113,7 +121,7 @@ function Dashboard() {
             label="You Are Owed"
             value={formatMoney(owedToYou)}
             tone="good"
-            loading={direct.isLoading}
+            loading={allGroupBalances.isLoading}
           />
 
           <StatCard
@@ -121,7 +129,7 @@ function Dashboard() {
             label="You Owe"
             value={formatMoney(youOwe)}
             tone="bad"
-            loading={direct.isLoading}
+            loading={allGroupBalances.isLoading}
           />
         </div>
 
@@ -195,7 +203,7 @@ function Dashboard() {
           {/* Recent Balances */}
           <Card className="lg:col-span-2 shadow-sm">
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Recent Balances</CardTitle>
+              <CardTitle>Group Balances</CardTitle>
 
               <Link
                 to="/balances"
@@ -206,7 +214,7 @@ function Dashboard() {
             </CardHeader>
 
             <CardContent>
-              {direct.isLoading ? (
+              {allGroupBalances.isLoading ? (
                 <div className="space-y-3">
                   {[...Array(5)].map((_, i) => (
                     <Skeleton key={i} className="h-16 w-full rounded-xl" />
@@ -216,7 +224,7 @@ function Dashboard() {
                 <EmptyState
                   icon={<Wallet className="h-6 w-6" />}
                   title="All settled up"
-                  desc="No outstanding balances right now."
+                  desc="No outstanding balances in your groups right now."
                 />
               ) : (
                 <ul className="space-y-3">

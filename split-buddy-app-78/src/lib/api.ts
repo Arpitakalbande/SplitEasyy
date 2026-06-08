@@ -110,6 +110,23 @@ export type PaymentItem = {
   payment_status: string;
   created_at: string;
 };
+export type Notification = {
+  id: string;
+  message?: string;
+  text?: string;
+  is_read?: boolean;
+  created_at?: string;
+  user_id?: string;
+};
+export type GroupSummaryData = {
+  id: string;
+  group_name: string;
+  total_members: number;
+  total_expenses: number;
+  you_owe?: number;
+  owed_to_you?: number;
+  settlement_status?: string;
+};
 
 // --- Endpoints ---
 export const api = {
@@ -163,7 +180,9 @@ export const api = {
   dashboard: () => apiFetch<Record<string, unknown>>("/dashboard/"),
 
   // Notifications
-  notifications: () => apiFetch<unknown[]>("/notifications/"),
+  notifications: () => apiFetch<Notification[]>("/notifications/"),
+  markNotificationAsRead: (id: string) =>
+    apiFetch<Notification>(`/notifications/${id}/read`, { method: "PUT" }),
 };
 
 export { API_URL };

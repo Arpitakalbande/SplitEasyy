@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Plus, Receipt, Trash2, UserPlus, Wallet } from "lucide-react";
+import { ArrowLeft, Plus, Receipt, Trash2, UserPlus, Wallet, Edit } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api, type Balance, type ExpenseItem, type GroupDetails, type Member } from "@/lib/api";
@@ -55,6 +55,10 @@ function GroupDetail() {
   const [memberOpen, setMemberOpen] = useState(false);
   const [memberName, setMemberName] = useState("");
   const [memberEmail, setMemberEmail] = useState("");
+  const [editingExpense, setEditingExpense] = useState<ExpenseItem | null>(null);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editAmount, setEditAmount] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
   const addMember = useMutation({
     mutationFn: () => api.addMember(groupId, { name: memberName, email: memberEmail }),
@@ -70,6 +74,24 @@ function GroupDetail() {
   const removeExpense = useMutation({
     mutationFn: (id: string) => api.deleteExpense(id),
     onSuccess: () => { toast.success("Expense deleted"); invalidateAll(); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const updateExpense = useMutation({
+    mutationFn: (id: string) =>
+      api.updateExpense(id, {
+        amount: parseFloat(editAmount),
+        description: editDescription,
+        participants: [],
+      }),
+    onSuccess: () => {
+      toast.success("Expense updated");
+      setEditOpen(false);
+      setEditingExpense(null);
+      setEditAmount("");
+      setEditDescription("");
+      invalidateAll();
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -133,6 +155,41 @@ function GroupDetail() {
               />
             </DialogContent>
           </Dialog>
+          <Dialog open={editOpen} onOpenChange={setEditOpen}>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Edit expense</DialogTitle></DialogHeader>
+              <form
+                onSubmit={(e) => { e.preventDefault(); if (editingExpense) updateExpense.mutate(editingExpense.id); }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="edit-desc">Description</Label>
+                  <Input
+                    id="edit-desc"
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-amt">Amount</Label>
+                  <Input
+                    id="edit-amt"
+                    type="number"
+                    step="0.01"
+                    value={editAmount}
+                    onChange={(e) => setEditAmount(e.target.value)}
+                    required
+                  />
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={updateExpense.isPending}>
+                    {updateExpense.isPending ? "Updating…" : "Update"}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </>
       }
     >
@@ -169,7 +226,20 @@ function GroupDetail() {
                         <p className="font-semibold">{formatMoney(e.amount)}</p>
                       </div>
                       <Button
-                        size="icon" variant="ghost"
+                        size="icon"
+                        variant="ghost"
+                        onClick={() => {
+                          setEditingExpense(e);
+                          setEditDescription(e.description);
+                          setEditAmount(e.amount.toString());
+                          setEditOpen(true);
+                        }}
+                      >
+                        <Edit className="h-4 w-4 text-blue-500" />
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
                         onClick={() => { if (confirm("Delete this expense?")) removeExpense.mutate(e.id); }}
                       >
                         <Trash2 className="h-4 w-4 text-danger" />

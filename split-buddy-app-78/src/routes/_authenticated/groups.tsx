@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Users } from "lucide-react";
+import { Plus, Users, Receipt } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import { api, type GroupSummary } from "@/lib/api";
-import { AppShell } from "@/components/app-shell";
+import { AppShell, formatMoney } from "@/components/app-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -72,7 +72,7 @@ function GroupsPage() {
     >
       {q.isLoading ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-32" />)}
+          {[...Array(6)].map((_, i) => <Skeleton key={i} className="h-40" />)}
         </div>
       ) : list.length === 0 ? (
         <EmptyState
@@ -88,24 +88,62 @@ function GroupsPage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {list.map((g) => (
-            <Link key={g.id} to="/groups/$groupId" params={{ groupId: g.id }}>
-              <Card className="hover:border-primary/50 transition-colors h-full">
-                <CardContent className="pt-6">
-                  <div className="flex items-start gap-3">
-                    <div className="h-12 w-12 rounded-lg bg-primary/15 text-primary grid place-items-center font-bold text-lg shrink-0">
-                      {g.group_name?.[0]?.toUpperCase() ?? "G"}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-semibold truncate">{g.group_name}</p>
-                      <p className="text-xs text-muted-foreground mt-1">Tap to view balances</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <GroupCard key={g.id} groupId={g.id} groupName={g.group_name} />
           ))}
         </div>
       )}
     </AppShell>
+  );
+}
+
+function GroupCard({ groupId, groupName }: { groupId: string; groupName: string }) {
+  const summary = useQuery({
+    queryKey: ["group", groupId, "summary"],
+    queryFn: () => api.groupSummary(groupId),
+  });
+
+  const summaryData = (summary.data ?? {}) as Record<string, unknown>;
+  const totalExpenses = (summaryData.total_expenses as number) ?? 0;
+  const memberCount = (summaryData.total_members as number) ?? 0;
+
+  return (
+    <Link to="/groups/$groupId" params={{ groupId }}>
+      <Card className="hover:border-primary/50 transition-colors h-full hover:shadow-md">
+        <CardContent className="pt-6">
+          <div className="flex items-start gap-3 mb-4">
+            <div className="h-12 w-12 rounded-lg bg-primary/15 text-primary grid place-items-center font-bold text-lg shrink-0">
+              {groupName?.[0]?.toUpperCase() ?? "G"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold truncate">{groupName}</p>
+              <p className="text-xs text-muted-foreground mt-1">Tap to view details</p>
+            </div>
+          </div>
+          
+          <div className="space-y-2 text-sm border-t pt-3">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Users className="h-3.5 w-3.5" /> Members
+              </span>
+              <span className="font-medium">
+                {summary.isLoading ? <Skeleton className="h-4 w-8" /> : memberCount}
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground flex items-center gap-1">
+                <Receipt className="h-3.5 w-3.5" /> Expenses
+              </span>
+              <span className="font-medium">
+                {summary.isLoading ? (
+                  <Skeleton className="h-4 w-12" />
+                ) : (
+                  totalExpenses
+                )}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </Link>
   );
 }

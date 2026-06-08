@@ -1,10 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { Bell } from "lucide-react";
-import { api } from "@/lib/api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Bell, Check } from "lucide-react";
+import { toast } from "sonner";
+import { api, type Notification } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { AppShell } from "@/components/app-shell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "./dashboard";
 
 export const Route = createFileRoute("/_authenticated/notifications")({
@@ -12,30 +15,86 @@ export const Route = createFileRoute("/_authenticated/notifications")({
 });
 
 function NotificationsPage() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
   const q = useQuery({ queryKey: ["notifications"], queryFn: api.notifications });
+  
+  const markAsRead = useMutation({
+    mutationFn: (id: string) => api.markNotificationAsRead(id),
+    onSuccess: () => {
+      toast.success("Marked as read");
+      qc.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const list = Array.isArray(q.data) ? q.data : [];
+  const unreadCount = list.filter((n) => !((n as Notification).is_read ?? false)).length;
 
   return (
-    <AppShell title="Notifications">
+    <AppShell
+      title={`Notifications${unreadCount > 0 ? ` (${unreadCount})` : ""}`}
+      action={unreadCount > 0 ? (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => list.forEach((n) => {
+            if (!((n as Notification).is_read ?? false)) {
+              markAsRead.mutate((n as Notification).id);
+            }
+          })}
+          disabled={markAsRead.isPending}
+        >
+          Mark all as read
+        </Button>
+      ) : null}
+    >
       <Card>
         <CardHeader><CardTitle>Recent activity</CardTitle></CardHeader>
         <CardContent>
-          {q.isLoading ? <Skeleton className="h-24" /> : list.length === 0 ? (
-            <EmptyState icon={<Bell className="h-6 w-6" />} title="You're all caught up" desc="Notifications will appear here." />
+          {q.isLoading ? (
+            <Skeleton className="h-24" />
+          ) : list.length === 0 ? (
+            <EmptyState
+              icon={<Bell className="h-6 w-6" />}
+              title="You're all caught up"
+              desc="Notifications will appear here."
+            />
           ) : (
             <ul className="divide-y">
-              {list.map((n, i) => {
-                const item = n as Record<string, unknown>;
-                const message =
-                  (item.message as string) ?? (item.text as string) ?? JSON.stringify(item);
-                const created = (item.created_at as string) ?? "";
+              {list.map((n) => {
+                const item = n as Notification;
+                const message = item.message ?? item.text ?? JSON.stringify(item);
+                const created = item.created_at ?? "";
+                const isRead = item.is_read ?? false;
+                
                 return (
-                  <li key={i} className="py-3">
-                    <p className="text-sm">{message}</p>
-                    {created && (
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(created).toLocaleString()}
+                  <li
+                    key={item.id}
+                    className={`py-3 px-3 rounded-md flex items-start justify-between gap-3 ${
+                      isRead ? "bg-muted/30" : "bg-primary/5"
+                    }`}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-sm ${isRead ? "text-muted-foreground" : ""}`}>
+                        {message}
                       </p>
+                      {created && (
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {new Date(created).toLocaleString()}
+                        </p>
+                      )}
+                    </div>
+                    {!isRead && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => markAsRead.mutate(item.id)}
+                        disabled={markAsRead.isPending}
+                        className="shrink-0"
+                      >
+                        <Check className="h-4 w-4" />
+                      </Button>
                     )}
                   </li>
                 );
