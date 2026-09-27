@@ -162,8 +162,6 @@ npm run dev
 * Mobile responsiveness improvements
 * Email notifications
 
----238283
-
 
 ## 🤝 Contributors
 
